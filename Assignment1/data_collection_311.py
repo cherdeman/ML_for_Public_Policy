@@ -4,6 +4,7 @@ from sodapy import Socrata
 graffiti_dataset_id = "cdmx-wzbz"
 buildings_dataset_id = "yama-9had"
 alley_dataset_id = "j9pw-ad5p"
+community_areas_id = "igwz-8jzy"
 building_date_range = "date_service_request_was_received between '2017-01-01T00:00:00.000' and '2018-01-01T00:00:00.000'"
 graffiti_alley_date_range = "creation_date between '2017-01-01T00:00:00.000' and '2018-01-01T00:00:00.000'"
 
@@ -26,6 +27,5 @@ building_df = pd.DataFrame.from_records(building_results)
 alley_df = pd.DataFrame.from_records(alley_results)
 
 # determine columns for merge
-intersect = [x for x in graffiti_df if x in building_df and  x in alley_df]
 
 result = pd.concat([graffiti_df, building_df, alley_df])
