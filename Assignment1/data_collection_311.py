@@ -1,22 +1,24 @@
 import pandas as pd
 from sodapy import Socrata
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 graffiti_id = "cdmx-wzbz"
-buildings_id = "yama-9had"
+building_id = "yama-9had"
 alley_id = "j9pw-ad5p"
+community_id = "igwz-8jzy"
 
 date_svc = "date_service_request_was_received"
 creation_date = "creation_date"
-date_range = " between '2017-01-01T00:00:00.000' and '2018-01-01T00:00:00.000'"
+date_range = " between '2017-01-01T00:00:00.000' and '2017-12-31T00:00:00.000'"
 
 graffiti_lim = 150000
 alley_lim = 30000
 building_lim = 5000
 
+index_col = 'service_request_number'
+comm_index = 'area_numbe'
 
-#building_date_range = "date_service_request_was_received between '2017-01-01T00:00:00.000' and '2018-01-01T00:00:00.000'"
-#graffiti_alley_date_range = "creation_date between '2017-01-01T00:00:00.000' and '2018-01-01T00:00:00.000'"
-#community_areas_id = "igwz-8jzy"
 
 def load_full_data():
 	'''
@@ -26,11 +28,14 @@ def load_full_data():
 
 	# Load basic dataframes
 	graffiti_df = basic_load(graffiti_id, client, creation_date, date_range, 
-		graffiti_lim)
+		graffiti_lim, index_col)
 	alley_df = basic_load(alley_id, client, creation_date, date_range, 
-		alley_lim)
+		alley_lim, index_col)
 	building_df = basic_load(building_id, client, date_svc, date_range, 
-		building_lim)
+		building_lim, index_col)
+	
+	comm_results = client.get(community_id)
+	community_df = pd.DataFrame.from_records(comm_results, index=comm_index)
 
 	# Manipulate building_df to match street_address and type of request fields
 	building_df['street_address']= (building_df['address_street_number'] + ' ' + 
@@ -42,17 +47,25 @@ def load_full_data():
 		'address_street_name', 'address_street_suffix', 'service_request_type'], 
 		axis = 1, inplace = True)
 
-	# Merge dataframe
-	full_df = pd.concat([graffiti_df, building_df, alley_df])
+	# Concatenate graffiti, bulding, and alley dataframes
+	inter_df = pd.concat([graffiti_df, building_df, alley_df])
+
+	# Pull in community name, drop extraneous columns
+	full_df = inter_df.merge(community_df, left_on='community_area', right_index=True)
+	full_df.drop(['area', 'area_num_1', 'comarea', 'comarea_id', 'perimeter', 
+		'shape_area', 'shape_len', 'the_geom'], axis = 1, inplace = True)
 
 	# Convert date columns to datetime format
 	full_df['creation_date'] = pd.to_datetime(full_df['creation_date'])
 	full_df['completion_date'] = pd.to_datetime(full_df['completion_date'])
 	full_df['date_service_request_was_received'] = pd.to_datetime(
 		full_df['date_service_request_was_received'])
+	
+	# Create response time column
 	full_df['response_time'] = (full_df['completion_date'] - 
 		full_df['creation_date'])
 
+	# Extract year and month from date columns, unify across datasets
 	full_df['year'] = full_df['creation_date'].dt.year
 	full_df['year'].fillna(full_df['date_service_request_was_received'].dt.year, 
 		inplace = True)
@@ -63,24 +76,17 @@ def load_full_data():
 	return full_df
 
 
-def basic_load(dataset_id, client, date_field, date_range, limit_val):
+def basic_load(dataset_id, client, date_field, date_range, limit_val, index_col):
 	'''
 	'''
-	results = client.get(dataset_id, where=date_field + date_range, limit=limit_val)
-	result_df = pd.DataFrame.from_records(results)
+	results = client.get(dataset_id, where=date_field + date_range, 
+		limit=limit_val)
+	result_df = pd.DataFrame.from_records(results, index=index_col)
 
 	return result_df
 
 
+
+
+
 											
-
-# First 2000 results, returned as JSON from API / converted to Python list of
-# dictionaries by sodapy.
-graffiti_results = client.get(graffiti_dataset_id, where=graffiti_alley_date_range, limit = 150000)
-building_results = client.get(buildings_dataset_id, where=building_date_range, limit = 5000)
-alley_results = client.get(alley_dataset_id, where=graffiti_alley_date_range, limit = 30000)
-
-# Convert to pandas DataFrame
-graffiti_df = pd.DataFrame.from_records(graffiti_results)
-building_df = pd.DataFrame.from_records(building_results)
-alley_df = pd.DataFrame.from_records(alley_results)
