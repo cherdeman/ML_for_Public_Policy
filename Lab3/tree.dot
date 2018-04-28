@@ -1,0 +1,33 @@
+digraph Tree {
+node [shape=box, style="filled, rounded", color="black", fontname=helvetica] ;
+edge [fontname=helvetica] ;
+0 [label="Health (Life Expectancy) <= 0.722\ngini = 0.413\nsamples = 110\nvalue = [78, 32]\nclass = Europe", fillcolor="#e5813996"] ;
+1 [label="Happiness Score <= 5.512\ngini = 0.155\nsamples = 59\nvalue = [54, 5]\nclass = Europe", fillcolor="#e58139e7"] ;
+0 -> 1 [labeldistance=2.5, labelangle=45, headlabel="True"] ;
+2 [label="Standard Error <= 0.032\ngini = 0.041\nsamples = 48\nvalue = [47, 1]\nclass = Europe", fillcolor="#e58139fa"] ;
+1 -> 2 ;
+3 [label="gini = 0.375\nsamples = 4\nvalue = [3, 1]\nclass = Europe", fillcolor="#e58139aa"] ;
+2 -> 3 ;
+4 [label="gini = 0.0\nsamples = 44\nvalue = [44, 0]\nclass = Europe", fillcolor="#e58139ff"] ;
+2 -> 4 ;
+5 [label="Standard Error <= 0.05\ngini = 0.463\nsamples = 11\nvalue = [7, 4]\nclass = Europe", fillcolor="#e581396d"] ;
+1 -> 5 ;
+6 [label="gini = 0.32\nsamples = 5\nvalue = [1, 4]\nclass = Not Europe", fillcolor="#399de5bf"] ;
+5 -> 6 ;
+7 [label="gini = 0.0\nsamples = 6\nvalue = [6, 0]\nclass = Europe", fillcolor="#e58139ff"] ;
+5 -> 7 ;
+8 [label="Happiness Score <= 5.819\ngini = 0.498\nsamples = 51\nvalue = [24, 27]\nclass = Not Europe", fillcolor="#399de51c"] ;
+0 -> 8 [labeldistance=2.5, labelangle=-45, headlabel="False"] ;
+9 [label="Standard Error <= 0.039\ngini = 0.278\nsamples = 18\nvalue = [3, 15]\nclass = Not Europe", fillcolor="#399de5cc"] ;
+8 -> 9 ;
+10 [label="gini = 0.0\nsamples = 3\nvalue = [3, 0]\nclass = Europe", fillcolor="#e58139ff"] ;
+9 -> 10 ;
+11 [label="gini = 0.0\nsamples = 15\nvalue = [0, 15]\nclass = Not Europe", fillcolor="#399de5ff"] ;
+9 -> 11 ;
+12 [label="Family <= 1.259\ngini = 0.463\nsamples = 33\nvalue = [21, 12]\nclass = Europe", fillcolor="#e581396d"] ;
+8 -> 12 ;
+13 [label="gini = 0.188\nsamples = 19\nvalue = [17, 2]\nclass = Europe", fillcolor="#e58139e1"] ;
+12 -> 13 ;
+14 [label="gini = 0.408\nsamples = 14\nvalue = [4, 10]\nclass = Not Europe", fillcolor="#399de599"] ;
+12 -> 14 ;
+}
