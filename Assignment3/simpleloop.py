@@ -33,17 +33,18 @@ def define_clfs_params(grid_size):
     """
 
     clfs = {'RF': RandomForestClassifier(n_estimators=50, n_jobs=-1),
-        'ET': ExtraTreesClassifier(n_estimators=10, n_jobs=-1, criterion='entropy'),
+        #s'ET': ExtraTreesClassifier(n_estimators=10, n_jobs=-1, criterion='entropy'),
         'AB': AdaBoostClassifier(DecisionTreeClassifier(max_depth=1), algorithm="SAMME", n_estimators=200),
         'LR': LogisticRegression(penalty='l1', C=1e5),
         'SVM': svm.SVC(kernel='linear', probability=True, random_state=0),
-        'GB': GradientBoostingClassifier(learning_rate=0.05, subsample=0.5, max_depth=6, n_estimators=10),
-        'NB': GaussianNB(),
+        #'GB': GradientBoostingClassifier(learning_rate=0.05, subsample=0.5, max_depth=6, n_estimators=10),
+        #'NB': GaussianNB(),
         'DT': DecisionTreeClassifier(),
-        'SGD': SGDClassifier(loss="hinge", penalty="l2"),
+        #'SGD': SGDClassifier(loss="hinge", penalty="l2"),
         'KNN': KNeighborsClassifier(n_neighbors=3) 
             }
 
+    '''
     large_grid = { 
     'RF':{'n_estimators': [1,10,100,1000,10000], 'max_depth': [1,5,10,20,50,100], 'max_features': ['sqrt','log2'],'min_samples_split': [2,5,10], 'n_jobs': [-1]},
     'LR': { 'penalty': ['l1','l2'], 'C': [0.00001,0.0001,0.001,0.01,0.1,1,10]},
@@ -56,15 +57,16 @@ def define_clfs_params(grid_size):
     'SVM' :{'C' :[0.00001,0.0001,0.001,0.01,0.1,1,10],'kernel':['linear']},
     'KNN' :{'n_neighbors': [1,5,10,25,50,100],'weights': ['uniform','distance'],'algorithm': ['auto','ball_tree','kd_tree']}
            }
+    '''
     
     small_grid = { 
     'RF':{'n_estimators': [10,100], 'max_depth': [5,50], 'max_features': ['sqrt','log2'],'min_samples_split': [2,10], 'n_jobs': [-1]},
     'LR': { 'penalty': ['l1','l2'], 'C': [0.00001,0.001,0.1,1,10]},
-    'SGD': { 'loss': ['hinge','log','perceptron'], 'penalty': ['l2','l1','elasticnet']},
-    'ET': { 'n_estimators': [10,100], 'criterion' : ['gini', 'entropy'] ,'max_depth': [5,50], 'max_features': ['sqrt','log2'],'min_samples_split': [2,10], 'n_jobs': [-1]},
+    #'SGD': { 'loss': ['hinge','log','perceptron'], 'penalty': ['l2','l1','elasticnet']},
+    #'ET': { 'n_estimators': [10,100], 'criterion' : ['gini', 'entropy'] ,'max_depth': [5,50], 'max_features': ['sqrt','log2'],'min_samples_split': [2,10], 'n_jobs': [-1]},
     'AB': { 'algorithm': ['SAMME', 'SAMME.R'], 'n_estimators': [1,10,100,1000,10000]},
-    'GB': {'n_estimators': [10,100], 'learning_rate' : [0.001,0.1,0.5],'subsample' : [0.1,0.5,1.0], 'max_depth': [5,50]},
-    'NB' : {},
+    #'GB': {'n_estimators': [10,100], 'learning_rate' : [0.001,0.1,0.5],'subsample' : [0.1,0.5,1.0], 'max_depth': [5,50]},
+    #'NB' : {},
     'DT': {'criterion': ['gini', 'entropy'], 'max_depth': [1,5,10,20,50,100],'min_samples_split': [2,5,10]},
     'SVM' :{'C' :[0.00001,0.0001,0.001,0.01,0.1,1,10],'kernel':['linear']},
     'KNN' :{'n_neighbors': [1,5,10,25,50,100],'weights': ['uniform','distance'],'algorithm': ['auto','ball_tree','kd_tree']}
@@ -73,11 +75,11 @@ def define_clfs_params(grid_size):
     test_grid = { 
     'RF':{'n_estimators': [1], 'max_depth': [1], 'max_features': ['sqrt'],'min_samples_split': [10]},
     'LR': { 'penalty': ['l1'], 'C': [0.01]},
-    'SGD': { 'loss': ['perceptron'], 'penalty': ['l2']},
-    'ET': { 'n_estimators': [1], 'criterion' : ['gini'] ,'max_depth': [1], 'max_features': ['sqrt'],'min_samples_split': [10]},
+    #'SGD': { 'loss': ['perceptron'], 'penalty': ['l2']},
+    #'ET': { 'n_estimators': [1], 'criterion' : ['gini'] ,'max_depth': [1], 'max_features': ['sqrt'],'min_samples_split': [10]},
     'AB': { 'algorithm': ['SAMME'], 'n_estimators': [1]},
-    'GB': {'n_estimators': [1], 'learning_rate' : [0.1],'subsample' : [0.5], 'max_depth': [1]},
-    'NB' : {},
+    #'GB': {'n_estimators': [1], 'learning_rate' : [0.1],'subsample' : [0.5], 'max_depth': [1]},
+    #'NB' : {},
     'DT': {'criterion': ['gini'], 'max_depth': [1],'min_samples_split': [10]},
     'SVM' :{'C' :[0.01],'kernel':['linear']},
     'KNN' :{'n_neighbors': [5],'weights': ['uniform'],'algorithm': ['auto']}
@@ -145,13 +147,13 @@ def plot_precision_recall_n(y_true, y_prob, model_name):
     
 
 
-def clf_loop(models_to_run, clfs, grid, X, y):
+def clf_loop(models_to_run, clfs, grid, X_train, X_test, y_train, y_test, training_dates, testing_dates):
     """Runs the loop using models_to_run, clfs, gridm and the data
     """
-    results_df =  pd.DataFrame(columns=('model_type','clf', 'parameters', 'auc-roc','p_at_5', 'p_at_10', 'p_at_20'))
+    results_df =  pd.DataFrame(columns=('training_dates', 'testing_dates', 'model_type','clf', 'parameters', 'auc-roc','p_at_5', 'p_at_10', 'p_at_20'))
     for n in range(1, 2):
         # create training and valdation sets
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=0)
+        #X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=0)
         for index,clf in enumerate([clfs[x] for x in models_to_run]):
             print(models_to_run[index])
             parameter_values = grid[models_to_run[index]]
@@ -162,11 +164,12 @@ def clf_loop(models_to_run, clfs, grid, X, y):
                     # you can also store the model, feature importances, and prediction scores
                     # we're only storing the metrics for now
                     y_pred_probs_sorted, y_test_sorted = zip(*sorted(zip(y_pred_probs, y_test), reverse=True))
-                    results_df.loc[len(results_df)] = [models_to_run[index],clf, p,
-                                                       roc_auc_score(y_test, y_pred_probs),
+                    results_df.loc[len(results_df)] = [training_dates, testing_dates, models_to_run[index],clf, p,
+                                                       #roc_auc_score(y_test, y_pred_probs),
                                                        precision_at_k(y_test_sorted,y_pred_probs_sorted,5.0),
                                                        precision_at_k(y_test_sorted,y_pred_probs_sorted,10.0),
-                                                       precision_at_k(y_test_sorted,y_pred_probs_sorted,20.0)]
+                                                       precision_at_k(y_test_sorted,y_pred_probs_sorted,20.0)
+                                                       ]
                     if NOTEBOOK == 1:
                         plot_precision_recall_n(y_test,y_pred_probs,clf)
                 except IndexError as e:
