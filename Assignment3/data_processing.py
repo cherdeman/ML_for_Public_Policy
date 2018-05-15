@@ -117,7 +117,18 @@ def plot_correlations(df, x, y, hue = None, fitreg = False):
 
 
 #### DATA PRE-PROCESSING/CLEANING ####
-def fill_nulls(df):
+#def convert_tf_to_binary(df, col):
+#	return df[col] = np.where(df[col]=='t', 1, 0)
+
+def cols_with_nulls(df):
+	'''
+	'''
+	isnull = df.isnull().any()
+	isnull_cols = list(isnull[isnull == True].index)
+
+	return isnull_cols
+
+def fill_nulls(df, col):
 	'''
 	Find values in a dataframe with null values and fill them with the median
 	value of that variable
@@ -128,13 +139,12 @@ def fill_nulls(df):
 	Returns the original dataframe with null values filled
 	'''
 	# Find columns with missing values
-	isnull = df.isnull().any()
-	isnull_cols = list(isnull[isnull == True].index)
+	isnull_cols = cols_with_nulls(df)
 
 	# Fill nulls with median
-	for col in isnull_cols:
-		col_mean = df[col].median()
-		df[col].fillna(col_mean, inplace = True)
+	#for col in isnull_cols:
+	col_median = df[col].median()
+	df[col].fillna(col_median, inplace = True)
 
 	return df
 
