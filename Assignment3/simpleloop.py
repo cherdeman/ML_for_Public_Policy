@@ -165,7 +165,7 @@ def clf_loop(models_to_run, clfs, grid, X_train, X_test, y_train, y_test, traini
                     # we're only storing the metrics for now
                     y_pred_probs_sorted, y_test_sorted = zip(*sorted(zip(y_pred_probs, y_test), reverse=True))
                     results_df.loc[len(results_df)] = [training_dates, testing_dates, models_to_run[index],clf, p,
-                                                       #roc_auc_score(y_test, y_pred_probs),
+                                                       roc_auc_score(y_test, y_pred_probs),
                                                        precision_at_k(y_test_sorted,y_pred_probs_sorted,5.0),
                                                        precision_at_k(y_test_sorted,y_pred_probs_sorted,10.0),
                                                        precision_at_k(y_test_sorted,y_pred_probs_sorted,20.0)
