@@ -271,34 +271,3 @@ def confusion_matrix(y_actual, y_predict):
 		sample_weight=None)
 
 
-def knn_evaluation_matrix(k_range, x_train, y_train, x_test, y_test, 
-	metrics = ['minkowski','euclidean', 'manhattan'], 
-	weight_funcs = ['uniform', 'distance']):
-	'''
-	Evaluate models with a variety of different parameters
-
-	Returns a dataframe
-	'''
-	content = []
-
-	for k in k_range:
-	    for metric in metrics:
-	        for func in weight_funcs:
-	            params = [k, metric, func]
-	            model = build_knn(k, func, metric)
-	            model.fit(x_train, y_train)
-	            train_pred = model.predict(x_train)
-	            test_pred = model.predict(x_test)
-	            train_acc = check_accuracy(y_train, train_pred)
-	            test_acc = check_accuracy(y_test, test_pred)
-	            train_confusion = confusion_matrix(y_train, train_pred)
-	            test_confusion = confusion_matrix(y_test, test_pred)
-	            tup = [k, metric, func, train_acc, test_acc, train_confusion, test_confusion]
-	            content.append(tup)
-
-	df = pd.DataFrame(content, columns = ['num_neighbors', 'metric', 
-		'weighting_function', 'training_acc', 'test_acc', 'train_confusion', 'test_confusion'])
-
-	return df
-
-

@@ -2,7 +2,7 @@ from __future__ import division
 import pandas as pd
 import numpy as np
 from sklearn import preprocessing, cross_validation, svm, metrics, tree, decomposition, svm
-from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier, GradientBoostingClassifier, AdaBoostClassifier
+from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier, GradientBoostingClassifier, AdaBoostClassifier, BaggingClassifier
 from sklearn.linear_model import LogisticRegression, Perceptron, SGDClassifier, OrthogonalMatchingPursuit, RandomizedLogisticRegression
 from sklearn.neighbors.nearest_centroid import NearestCentroid
 from sklearn.naive_bayes import GaussianNB, MultinomialNB, BernoulliNB
@@ -18,84 +18,85 @@ from scipy import optimize
 import time
 import seaborn as sns
 
-# for jupyter notebooks
-#%matplotlib inline
+from datetime import date, datetime, timedelta
+from dateutil.relativedelta import relativedelta
+
+import data_processing
+
 
 # if you're running this in a jupyter notebook, print out the graphs
-NOTEBOOK = 0
+NOTEBOOK = 1
 
-def define_clfs_params(grid_size):
-    """Define defaults for different classifiers.
-    Define three types of grids:
-    Test: for testing your code
-    Small: small grid
-    Large: Larger grid that has a lot more parameter sweeps
-    """
+# Definine sample clf and training grids
 
-    clfs = {'RF': RandomForestClassifier(n_estimators=50, n_jobs=-1),
-        #s'ET': ExtraTreesClassifier(n_estimators=10, n_jobs=-1, criterion='entropy'),
-        'AB': AdaBoostClassifier(DecisionTreeClassifier(max_depth=1), algorithm="SAMME", n_estimators=200),
-        'LR': LogisticRegression(penalty='l1', C=1e5),
-        'SVM': svm.SVC(kernel='linear', probability=True, random_state=0),
-        #'GB': GradientBoostingClassifier(learning_rate=0.05, subsample=0.5, max_depth=6, n_estimators=10),
-        #'NB': GaussianNB(),
-        'DT': DecisionTreeClassifier(),
-        #'SGD': SGDClassifier(loss="hinge", penalty="l2"),
-        'KNN': KNeighborsClassifier(n_neighbors=3) 
-            }
+clfs = {'RF': RandomForestClassifier(n_estimators=50, n_jobs=-1),
+    'BG': BaggingClassifier(LogisticRegression(penalty='l2', C=1)),
+    'AB': AdaBoostClassifier(DecisionTreeClassifier(max_depth=1), algorithm="SAMME", n_estimators=200),
+    'LR': LogisticRegression(penalty='l1', C=15),
+    'SVM': svm.SVC(kernel='linear', probability=True, random_state=0),
+    'GB': GradientBoostingClassifier(learning_rate=0.05, subsample=0.5, max_depth=6, n_estimators=10),
+    'DT': DecisionTreeClassifier(),
+    'KNN': KNeighborsClassifier(n_neighbors=3) 
+        }
 
+'''
+large_grid = { 
+'RF':{'n_estimators': [1,10,100,1000,10000], 'max_depth': [1,5,10,20,50,100], 'max_features': ['sqrt','log2'],'min_samples_split': [2,5,10], 'n_jobs': [-1]},
+'LR': { 'penalty': ['l1','l2'], 'C': [0.00001,0.0001,0.001,0.01,0.1,1,10]},
+'SGD': { 'loss': ['hinge','log','perceptron'], 'penalty': ['l2','l1','elasticnet']},
+'ET': { 'n_estimators': [1,10,100,1000,10000], 'criterion' : ['gini', 'entropy'] ,'max_depth': [1,5,10,20,50,100], 'max_features': ['sqrt','log2'],'min_samples_split': [2,5,10], 'n_jobs': [-1]},
+'AB': { 'algorithm': ['SAMME', 'SAMME.R'], 'n_estimators': [1,10,100,1000,10000]},
+'GB': {'n_estimators': [1,10,100,1000,10000], 'learning_rate' : [0.001,0.01,0.05,0.1,0.5],'subsample' : [0.1,0.5,1.0], 'max_depth': [1,3,5,10,20,50,100]},
+'NB' : {},
+'DT': {'criterion': ['gini', 'entropy'], 'max_depth': [1,5,10,20,50,100],'min_samples_split': [2,5,10]},
+'SVM' :{'C' :[0.00001,0.0001,0.001,0.01,0.1,1,10],'kernel':['linear']},
+'KNN' :{'n_neighbors': [1,5,10,25,50,100],'weights': ['uniform','distance'],'algorithm': ['auto','ball_tree','kd_tree']}
+       }
+'''
+
+small_grid = { 
+'RF':{'n_estimators': [10,100], 'max_depth': [5,50], 'max_features': ['sqrt','log2'],'min_samples_split': [2,10], 'n_jobs': [-1]},
+'BG':{'n_estimators': [1, 10, 100], 'max_samples': [0.1, 0.25, 0.5, 0.75], 'max_features':[0.1, 0.25, 0.5, 0.75], 'bootstrap': [True, False], 'bootstrap_features':[True, False]},
+'AB': { 'algorithm': ['SAMME', 'SAMME.R'], 'n_estimators': [1,10,100,1000,10000]},
+'LR': { 'penalty': ['l1','l2'], 'C': [0.00001,0.001,0.1,1,10]},
+'SVM' :{'C' :[0.00001,0.0001,0.001,0.01,0.1,1,10],'kernel':['linear']},
+'GB': {'n_estimators': [10,100], 'learning_rate' : [0.001,0.1,0.5],'subsample' : [0.1,0.5,1.0], 'max_depth': [5,50]},
+'DT': {'criterion': ['gini', 'entropy'], 'max_depth': [1,5,10,20,50,100],'min_samples_split': [2,5,10]},
+'KNN' :{'n_neighbors': [1,5,10,25,50,100],'weights': ['uniform','distance'],'algorithm': ['auto','ball_tree','kd_tree']}
+       }
+
+test_grid = { 
+'RF':{'n_estimators': [1], 'max_depth': [1], 'max_features': ['sqrt'],'min_samples_split': [10]},
+'BG':{'n_estimators': [1], 'max_samples': [0.5], 'max_features':[0.5], 'bootstrap': [False], 'bootstrap_features':[False]},
+'AB': { 'algorithm': ['SAMME'], 'n_estimators': [1]},
+'LR': { 'penalty': ['l1'], 'C': [0.01]},
+'SVM' :{'C' :[0.01],'kernel':['linear']},
+'GB': {'n_estimators': [1], 'learning_rate' : [0.1],'subsample' : [0.5], 'max_depth': [1]},
+'DT': {'criterion': ['gini'], 'max_depth': [1],'min_samples_split': [10]},
+'KNN' :{'n_neighbors': [5],'weights': ['uniform'],'algorithm': ['auto']}
+       }
+
+
+##################################################
+############## Helper Functions ##################
+##################################################
+
+# Train Test Split
+def temporal_train_test_sets(df, train_start, train_end, test_start, test_end, feature_cols, predictor_col):
     '''
-    large_grid = { 
-    'RF':{'n_estimators': [1,10,100,1000,10000], 'max_depth': [1,5,10,20,50,100], 'max_features': ['sqrt','log2'],'min_samples_split': [2,5,10], 'n_jobs': [-1]},
-    'LR': { 'penalty': ['l1','l2'], 'C': [0.00001,0.0001,0.001,0.01,0.1,1,10]},
-    'SGD': { 'loss': ['hinge','log','perceptron'], 'penalty': ['l2','l1','elasticnet']},
-    'ET': { 'n_estimators': [1,10,100,1000,10000], 'criterion' : ['gini', 'entropy'] ,'max_depth': [1,5,10,20,50,100], 'max_features': ['sqrt','log2'],'min_samples_split': [2,5,10], 'n_jobs': [-1]},
-    'AB': { 'algorithm': ['SAMME', 'SAMME.R'], 'n_estimators': [1,10,100,1000,10000]},
-    'GB': {'n_estimators': [1,10,100,1000,10000], 'learning_rate' : [0.001,0.01,0.05,0.1,0.5],'subsample' : [0.1,0.5,1.0], 'max_depth': [1,3,5,10,20,50,100]},
-    'NB' : {},
-    'DT': {'criterion': ['gini', 'entropy'], 'max_depth': [1,5,10,20,50,100],'min_samples_split': [2,5,10]},
-    'SVM' :{'C' :[0.00001,0.0001,0.001,0.01,0.1,1,10],'kernel':['linear']},
-    'KNN' :{'n_neighbors': [1,5,10,25,50,100],'weights': ['uniform','distance'],'algorithm': ['auto','ball_tree','kd_tree']}
-           }
     '''
-    
-    small_grid = { 
-    'RF':{'n_estimators': [10,100], 'max_depth': [5,50], 'max_features': ['sqrt','log2'],'min_samples_split': [2,10], 'n_jobs': [-1]},
-    'LR': { 'penalty': ['l1','l2'], 'C': [0.00001,0.001,0.1,1,10]},
-    #'SGD': { 'loss': ['hinge','log','perceptron'], 'penalty': ['l2','l1','elasticnet']},
-    #'ET': { 'n_estimators': [10,100], 'criterion' : ['gini', 'entropy'] ,'max_depth': [5,50], 'max_features': ['sqrt','log2'],'min_samples_split': [2,10], 'n_jobs': [-1]},
-    'AB': { 'algorithm': ['SAMME', 'SAMME.R'], 'n_estimators': [1,10,100,1000,10000]},
-    #'GB': {'n_estimators': [10,100], 'learning_rate' : [0.001,0.1,0.5],'subsample' : [0.1,0.5,1.0], 'max_depth': [5,50]},
-    #'NB' : {},
-    'DT': {'criterion': ['gini', 'entropy'], 'max_depth': [1,5,10,20,50,100],'min_samples_split': [2,5,10]},
-    'SVM' :{'C' :[0.00001,0.0001,0.001,0.01,0.1,1,10],'kernel':['linear']},
-    'KNN' :{'n_neighbors': [1,5,10,25,50,100],'weights': ['uniform','distance'],'algorithm': ['auto','ball_tree','kd_tree']}
-           }
-    
-    test_grid = { 
-    'RF':{'n_estimators': [1], 'max_depth': [1], 'max_features': ['sqrt'],'min_samples_split': [10]},
-    'LR': { 'penalty': ['l1'], 'C': [0.01]},
-    #'SGD': { 'loss': ['perceptron'], 'penalty': ['l2']},
-    #'ET': { 'n_estimators': [1], 'criterion' : ['gini'] ,'max_depth': [1], 'max_features': ['sqrt'],'min_samples_split': [10]},
-    'AB': { 'algorithm': ['SAMME'], 'n_estimators': [1]},
-    #'GB': {'n_estimators': [1], 'learning_rate' : [0.1],'subsample' : [0.5], 'max_depth': [1]},
-    #'NB' : {},
-    'DT': {'criterion': ['gini'], 'max_depth': [1],'min_samples_split': [10]},
-    'SVM' :{'C' :[0.01],'kernel':['linear']},
-    'KNN' :{'n_neighbors': [5],'weights': ['uniform'],'algorithm': ['auto']}
-           }
-    
-    if (grid_size == 'large'):
-        return clfs, large_grid
-    elif (grid_size == 'small'):
-        return clfs, small_grid
-    elif (grid_size == 'test'):
-        return clfs, test_grid
-    else:
-        return 0, 0
+    train_df = df[(df['date_posted'] >= train_start) & (df['date_posted'] <= train_end)]
+    test_df = df[(df['date_posted'] >= test_start) & (df['date_posted'] <= test_end)]
 
-# a set of helper function to do machine learning evalaution
+    X_train = train_df[feature_cols]
+    y_train = train_df[predictor_col]
 
+    X_test = test_df[feature_cols]
+    y_test = test_df[predictor_col]
+
+    return X_train, y_train, X_test, y_test
+
+# ML Validation Metrics
 def joint_sort_descending(l1, l2):
     # l1 and l2 have to be numpy arrays
     idx = np.argsort(l1)[::-1]
@@ -113,6 +114,36 @@ def precision_at_k(y_true, y_scores, k):
     #precision = precision[1]  # only interested in precision for label 1
     precision = precision_score(y_true, preds_at_k)
     return precision
+
+def recall_at_k(y_true, y_scores, k):
+    y_scores, y_true = joint_sort_descending(np.array(y_scores), np.array(y_true))
+    preds_at_k = generate_binary_at_k(y_scores, k)
+    recall = recall_score(y_true, preds_at_k)
+
+    return recall
+
+def baseline_preds(y_true, k):
+    num = len(y_true)
+    baseline_pred = [1]*num
+
+    return np.array(baseline_pred)
+
+def accuracy_at_k(y_true, y_scores, k):
+    y_scores, y_true = joint_sort_descending(np.array(y_scores), np.array(y_true))
+    preds_at_k = generate_binary_at_k(y_scores, k)
+    #print(len(preds_at_k))
+
+    pred = accuracy_score(y_true, preds_at_k)
+
+    return pred
+
+def f1_at_k(y_true, y_scores, k):
+    y_scores, y_true = joint_sort_descending(np.array(y_scores), np.array(y_true))
+    preds_at_k = generate_binary_at_k(y_scores, k)
+
+    f1 = f1_score(y_true, preds_at_k)
+
+    return f1
 
 def plot_precision_recall_n(y_true, y_prob, model_name):
     from sklearn.metrics import precision_recall_curve
@@ -145,12 +176,47 @@ def plot_precision_recall_n(y_true, y_prob, model_name):
     #plt.savefig(name)
     plt.show()
     
+##################################################
+############## Primary Functions #################
+##################################################
+
+def master_loop_with_time(df, start_time_date, end_time_date, prediction_windows, feature_cols, predictor_col, models_to_run, clfs, grid):
+    '''
+    '''
+    #start_time_date = datetime.strptime(start_time, '%Y-%m-%d')
+    #end_time_date = datetime.strptime(end_time, '%Y-%m-%d')
+    test_output = []
+    for prediction_window in prediction_windows:
+        train_start_time = start_time_date
+        train_end_time = train_start_time + relativedelta(months=+prediction_window) - relativedelta(days=+1)
+        while train_end_time + relativedelta(months=+prediction_window)<=end_time_date:
+            test_start_time = train_end_time + relativedelta(days=+1)
+            test_end_time = test_start_time + relativedelta(months=+prediction_window) - relativedelta(days=+1)
+            
+            print('training date range:', train_start_time, train_end_time) 
+            print('testing date range:', test_start_time, test_end_time)
+            # Build training and testing sets
+            X_train, y_train, X_test, y_test = temporal_train_test_sets(df, train_start_time, train_end_time, test_start_time, test_end_time, feature_cols, predictor_col)
+            # Fill nulls here to avoid data leakage
+            X_train = data_processing.fill_nulls(X_train,'students_reached')
+            X_test = data_processing.fill_nulls(X_test,'students_reached')
+            # Build classifiers
+            row_lst = clf_loop(models_to_run, clfs, grid, X_train, X_test, y_train, y_test, (train_start_time,train_end_time), (test_start_time,test_end_time))
+            # Increment time
+            train_end_time += relativedelta(months=+prediction_window)
+            test_output.extend(row_lst)
+
+    output_df = pd.DataFrame(test_output, columns=('training_dates', 'testing_dates', 'model_type','clf', 
+        'parameters', 'auc-roc','b_a_at_5', 'a_at_5', 'b_a_at_20', 'a_at_20', 'f1_at_5', 'f1_at_20', 'f1_at_50', 'p_at_1','p_at_5', 'p_at_10', 'p_at_20','p_at_50','r_at_1','r_at_5', 'r_at_10', 'r_at_20','r_at_50'))
+
+    return output_df
 
 
 def clf_loop(models_to_run, clfs, grid, X_train, X_test, y_train, y_test, training_dates, testing_dates):
     """Runs the loop using models_to_run, clfs, gridm and the data
     """
-    results_df =  pd.DataFrame(columns=('training_dates', 'testing_dates', 'model_type','clf', 'parameters', 'auc-roc','p_at_5', 'p_at_10', 'p_at_20'))
+    results = []
+    #results_df =  pd.DataFrame(columns=('training_dates', 'testing_dates', 'model_type','clf', 'parameters', 'auc-roc','p_at_5', 'p_at_10', 'p_at_20'))
     for n in range(1, 2):
         # create training and valdation sets
         #X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=0)
@@ -160,52 +226,37 @@ def clf_loop(models_to_run, clfs, grid, X_train, X_test, y_train, y_test, traini
             for p in ParameterGrid(parameter_values):
                 try:
                     clf.set_params(**p)
-                    y_pred_probs = clf.fit(X_train, y_train).predict_proba(X_test)[:,1]
+                    model_fit = clf.fit(X_train, y_train)
+                    y_pred_probs = model_fit.predict_proba(X_test)[:,1]
                     # you can also store the model, feature importances, and prediction scores
                     # we're only storing the metrics for now
                     y_pred_probs_sorted, y_test_sorted = zip(*sorted(zip(y_pred_probs, y_test), reverse=True))
-                    results_df.loc[len(results_df)] = [training_dates, testing_dates, models_to_run[index],clf, p,
+                    row = [training_dates, testing_dates, models_to_run[index],clf, p,
                                                        roc_auc_score(y_test, y_pred_probs),
+                                                       accuracy_at_k(y_test_sorted,baseline_preds(y_test_sorted,5.0),5.0),
+                                                       accuracy_at_k(y_test_sorted,y_pred_probs_sorted,5.0),
+                                                       accuracy_at_k(y_test_sorted,baseline_preds(y_test_sorted,20.0),20.0),
+                                                       f1_at_k(y_test_sorted,y_pred_probs_sorted,5.0),
+                                                       f1_at_k(y_test_sorted,y_pred_probs_sorted,20.0),
+                                                       f1_at_k(y_test_sorted,y_pred_probs_sorted,50.0),
+                                                       accuracy_at_k(y_test_sorted,y_pred_probs_sorted,20.0),
+                                                       precision_at_k(y_test_sorted,y_pred_probs_sorted,1.0),
                                                        precision_at_k(y_test_sorted,y_pred_probs_sorted,5.0),
                                                        precision_at_k(y_test_sorted,y_pred_probs_sorted,10.0),
-                                                       precision_at_k(y_test_sorted,y_pred_probs_sorted,20.0)
+                                                       precision_at_k(y_test_sorted,y_pred_probs_sorted,20.0),
+                                                       precision_at_k(y_test_sorted,y_pred_probs_sorted,50.0),
+                                                       recall_at_k(y_test_sorted,y_pred_probs_sorted,1.0),
+                                                       recall_at_k(y_test_sorted,y_pred_probs_sorted,5.0),
+                                                       recall_at_k(y_test_sorted,y_pred_probs_sorted,10.0),
+                                                       recall_at_k(y_test_sorted,y_pred_probs_sorted,20.0),
+                                                       recall_at_k(y_test_sorted,y_pred_probs_sorted,50.0),
                                                        ]
+                    results.append(row)
                     if NOTEBOOK == 1:
                         plot_precision_recall_n(y_test,y_pred_probs,clf)
                 except IndexError as e:
                     print('Error:',e)
                     continue
-    return results_df
-
-
-
-def main():
-
-    # define grid to use: test, small, large
-    grid_size = 'test'
-    clfs, grid = define_clfs_params(grid_size)
-
-    # define models to run
-    models_to_run=['RF','DT','KNN', 'ET', 'AB', 'GB', 'LR', 'NB']
-
-    # load data from csv
-    df = pd.read_csv("/Users/rayid/Projects/uchicago/Teaching/MLPP-2017/Homeworks/Assignment 2/credit-data.csv")
-
-    # select features to use
-    features  =  ['RevolvingUtilizationOfUnsecuredLines', 'DebtRatio', 'age', 'NumberOfTimes90DaysLate']
-    X = df[features]
     
-    # define label
-    y = df.SeriousDlqin2yrs
+    return results
 
-    # call clf_loop and store results in results_df
-    results_df = clf_loop(models_to_run, clfs,grid, X,y)
-    if NOTEBOOK == 1:
-        results_df
-
-    # save to csv
-    results_df.to_csv('results.csv', index=False)
-
-
-if __name__ == '__main__':
-    main()
