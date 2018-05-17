@@ -27,7 +27,7 @@ import data_processing
 # if you're running this in a jupyter notebook, print out the graphs
 NOTEBOOK = 1
 
-# Definine sample clf and training grids
+# Definine sample clf and training grids, will transfer these directly to notebook for modeling
 
 clfs = {'RF': RandomForestClassifier(n_estimators=50, n_jobs=-1),
     'BG': BaggingClassifier(LogisticRegression(penalty='l2', C=1)),
