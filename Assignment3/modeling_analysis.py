@@ -3,12 +3,9 @@ import pandas as pd
 import numpy as np
 from sklearn import preprocessing, cross_validation, svm, metrics, tree, decomposition, svm
 from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier, GradientBoostingClassifier, AdaBoostClassifier, BaggingClassifier
-from sklearn.linear_model import LogisticRegression, Perceptron, SGDClassifier, OrthogonalMatchingPursuit, RandomizedLogisticRegression
-from sklearn.neighbors.nearest_centroid import NearestCentroid
-from sklearn.naive_bayes import GaussianNB, MultinomialNB, BernoulliNB
+from sklearn.linear_model import LogisticRegression 
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.cross_validation import train_test_split
 from sklearn.grid_search import ParameterGrid
 from sklearn.metrics import *
 from sklearn.preprocessing import StandardScaler
@@ -23,58 +20,84 @@ from dateutil.relativedelta import relativedelta
 
 import data_processing
 
+##################################################
+############## Primary Functions #################
+##################################################
 
-# if you're running this in a jupyter notebook, print out the graphs
-NOTEBOOK = 1
+def master_loop_with_time(df, start_time_date, end_time_date, prediction_windows, feature_cols, predictor_col, models_to_run, clfs, grid):
+    '''
+    '''
+    #start_time_date = datetime.strptime(start_time, '%Y-%m-%d')
+    #end_time_date = datetime.strptime(end_time, '%Y-%m-%d')
+    test_output = []
+    for prediction_window in prediction_windows:
+        train_start_time = start_time_date
+        train_end_time = train_start_time + relativedelta(months=+prediction_window) - relativedelta(days=+1)
+        while train_end_time + relativedelta(months=+prediction_window)<=end_time_date:
+            test_start_time = train_end_time + relativedelta(days=+1)
+            test_end_time = test_start_time + relativedelta(months=+prediction_window) - relativedelta(days=+1)
+            
+            print('training date range:', train_start_time, train_end_time) 
+            print('testing date range:', test_start_time, test_end_time)
+            # Build training and testing sets
+            X_train, y_train, X_test, y_test = temporal_train_test_sets(df, train_start_time, train_end_time, test_start_time, test_end_time, feature_cols, predictor_col)
+            # Fill nulls here to avoid data leakage
+            X_train = data_processing.fill_nulls(X_train,'students_reached')
+            X_test = data_processing.fill_nulls(X_test,'students_reached')
+            # Build classifiers
+            row_lst = clf_loop(models_to_run, clfs, grid, X_train, X_test, y_train, y_test, (train_start_time,train_end_time), (test_start_time,test_end_time))
+            # Increment time
+            train_end_time += relativedelta(months=+prediction_window)
+            test_output.extend(row_lst)
 
-# Definine sample clf and training grids, will transfer these directly to notebook for modeling
+    output_df = pd.DataFrame(test_output, columns=('training_dates', 'testing_dates', 'model_type','clf', 
+        'parameters', 'baseline', 'auc-roc','a_at_5', 'a_at_20', 'a_at_50', 'f1_at_5', 'f1_at_20', 'f1_at_50', 'p_at_1','p_at_5', 'p_at_10', 'p_at_20','p_at_50','r_at_1','r_at_5', 'r_at_10', 'r_at_20','r_at_50'))
 
-clfs = {'RF': RandomForestClassifier(n_estimators=50, n_jobs=-1),
-    'BG': BaggingClassifier(LogisticRegression(penalty='l2', C=1)),
-    'AB': AdaBoostClassifier(DecisionTreeClassifier(max_depth=1), algorithm="SAMME", n_estimators=200),
-    'LR': LogisticRegression(penalty='l1', C=15),
-    'SVM': svm.SVC(kernel='linear', probability=True, random_state=0),
-    'GB': GradientBoostingClassifier(learning_rate=0.05, subsample=0.5, max_depth=6, n_estimators=10),
-    'DT': DecisionTreeClassifier(),
-    'KNN': KNeighborsClassifier(n_neighbors=3) 
-        }
+    return output_df
 
-'''
-large_grid = { 
-'RF':{'n_estimators': [1,10,100,1000,10000], 'max_depth': [1,5,10,20,50,100], 'max_features': ['sqrt','log2'],'min_samples_split': [2,5,10], 'n_jobs': [-1]},
-'LR': { 'penalty': ['l1','l2'], 'C': [0.00001,0.0001,0.001,0.01,0.1,1,10]},
-'SGD': { 'loss': ['hinge','log','perceptron'], 'penalty': ['l2','l1','elasticnet']},
-'ET': { 'n_estimators': [1,10,100,1000,10000], 'criterion' : ['gini', 'entropy'] ,'max_depth': [1,5,10,20,50,100], 'max_features': ['sqrt','log2'],'min_samples_split': [2,5,10], 'n_jobs': [-1]},
-'AB': { 'algorithm': ['SAMME', 'SAMME.R'], 'n_estimators': [1,10,100,1000,10000]},
-'GB': {'n_estimators': [1,10,100,1000,10000], 'learning_rate' : [0.001,0.01,0.05,0.1,0.5],'subsample' : [0.1,0.5,1.0], 'max_depth': [1,3,5,10,20,50,100]},
-'NB' : {},
-'DT': {'criterion': ['gini', 'entropy'], 'max_depth': [1,5,10,20,50,100],'min_samples_split': [2,5,10]},
-'SVM' :{'C' :[0.00001,0.0001,0.001,0.01,0.1,1,10],'kernel':['linear']},
-'KNN' :{'n_neighbors': [1,5,10,25,50,100],'weights': ['uniform','distance'],'algorithm': ['auto','ball_tree','kd_tree']}
-       }
-'''
 
-small_grid = { 
-'RF':{'n_estimators': [10,100], 'max_depth': [5,50], 'max_features': ['sqrt','log2'],'min_samples_split': [2,10], 'n_jobs': [-1]},
-'BG':{'n_estimators': [1, 10, 100], 'max_samples': [0.1, 0.25, 0.5, 0.75], 'max_features':[0.1, 0.25, 0.5, 0.75], 'bootstrap': [True, False], 'bootstrap_features':[True, False]},
-'AB': { 'algorithm': ['SAMME', 'SAMME.R'], 'n_estimators': [1,10,100,1000,10000]},
-'LR': { 'penalty': ['l1','l2'], 'C': [0.00001,0.001,0.1,1,10]},
-'SVM' :{'C' :[0.00001,0.0001,0.001,0.01,0.1,1,10],'kernel':['linear']},
-'GB': {'n_estimators': [10,100], 'learning_rate' : [0.001,0.1,0.5],'subsample' : [0.1,0.5,1.0], 'max_depth': [5,50]},
-'DT': {'criterion': ['gini', 'entropy'], 'max_depth': [1,5,10,20,50,100],'min_samples_split': [2,5,10]},
-'KNN' :{'n_neighbors': [1,5,10,25,50,100],'weights': ['uniform','distance'],'algorithm': ['auto','ball_tree','kd_tree']}
-       }
-
-test_grid = { 
-'RF':{'n_estimators': [1], 'max_depth': [1], 'max_features': ['sqrt'],'min_samples_split': [10]},
-'BG':{'n_estimators': [1], 'max_samples': [0.5], 'max_features':[0.5], 'bootstrap': [False], 'bootstrap_features':[False]},
-'AB': { 'algorithm': ['SAMME'], 'n_estimators': [1]},
-'LR': { 'penalty': ['l1'], 'C': [0.01]},
-'SVM' :{'C' :[0.01],'kernel':['linear']},
-'GB': {'n_estimators': [1], 'learning_rate' : [0.1],'subsample' : [0.5], 'max_depth': [1]},
-'DT': {'criterion': ['gini'], 'max_depth': [1],'min_samples_split': [10]},
-'KNN' :{'n_neighbors': [5],'weights': ['uniform'],'algorithm': ['auto']}
-       }
+def clf_loop(models_to_run, clfs, grid, X_train, X_test, y_train, y_test, training_dates, testing_dates):
+    """Runs the loop using models_to_run, clfs, gridm and the data
+    """
+    results = []
+    for n in range(1, 2):
+        for index,clf in enumerate([clfs[x] for x in models_to_run]):
+            print(models_to_run[index])
+            parameter_values = grid[models_to_run[index]]
+            for p in ParameterGrid(parameter_values):
+                try:
+                    clf.set_params(**p)
+                    model_fit = clf.fit(X_train, y_train)
+                    y_pred_probs = model_fit.predict_proba(X_test)[:,1]
+                    # Store metrics and model info for comparison
+                    y_pred_probs_sorted, y_test_sorted = zip(*sorted(zip(y_pred_probs, y_test), reverse=True))
+                    row = [training_dates, testing_dates, models_to_run[index],clf, p,
+                                                       baseline(y_test),   
+                                                       roc_auc_score(y_test, y_pred_probs),
+                                                       accuracy_at_k(y_test_sorted,y_pred_probs_sorted,5.0),
+                                                       accuracy_at_k(y_test_sorted,y_pred_probs_sorted,20.0),
+                                                       accuracy_at_k(y_test_sorted,y_pred_probs_sorted,50.0),
+                                                       f1_at_k(y_test_sorted,y_pred_probs_sorted,5.0),
+                                                       f1_at_k(y_test_sorted,y_pred_probs_sorted,20.0),
+                                                       f1_at_k(y_test_sorted,y_pred_probs_sorted,50.0),
+                                                       precision_at_k(y_test_sorted,y_pred_probs_sorted,1.0),
+                                                       precision_at_k(y_test_sorted,y_pred_probs_sorted,5.0),
+                                                       precision_at_k(y_test_sorted,y_pred_probs_sorted,10.0),
+                                                       precision_at_k(y_test_sorted,y_pred_probs_sorted,20.0),
+                                                       precision_at_k(y_test_sorted,y_pred_probs_sorted,50.0),
+                                                       recall_at_k(y_test_sorted,y_pred_probs_sorted,1.0),
+                                                       recall_at_k(y_test_sorted,y_pred_probs_sorted,5.0),
+                                                       recall_at_k(y_test_sorted,y_pred_probs_sorted,10.0),
+                                                       recall_at_k(y_test_sorted,y_pred_probs_sorted,20.0),
+                                                       recall_at_k(y_test_sorted,y_pred_probs_sorted,50.0),
+                                                       ]
+                    results.append(row)
+                    plot_precision_recall_n(y_test,y_pred_probs,clf)
+                except IndexError as e:
+                    print('Error:',e)
+                    continue
+    
+    return results
 
 
 ##################################################
@@ -122,11 +145,10 @@ def recall_at_k(y_true, y_scores, k):
 
     return recall
 
-def baseline_preds(y_true, k):
-    num = len(y_true)
-    baseline_pred = [1]*num
+def baseline(y_test):
+    base = y_test.sum()/ len(y_test)
 
-    return np.array(baseline_pred)
+    return base
 
 def accuracy_at_k(y_true, y_scores, k):
     y_scores, y_true = joint_sort_descending(np.array(y_scores), np.array(y_true))
@@ -173,90 +195,5 @@ def plot_precision_recall_n(y_true, y_prob, model_name):
     
     name = model_name
     plt.title(name)
-    #plt.savefig(name)
     plt.show()
     
-##################################################
-############## Primary Functions #################
-##################################################
-
-def master_loop_with_time(df, start_time_date, end_time_date, prediction_windows, feature_cols, predictor_col, models_to_run, clfs, grid):
-    '''
-    '''
-    #start_time_date = datetime.strptime(start_time, '%Y-%m-%d')
-    #end_time_date = datetime.strptime(end_time, '%Y-%m-%d')
-    test_output = []
-    for prediction_window in prediction_windows:
-        train_start_time = start_time_date
-        train_end_time = train_start_time + relativedelta(months=+prediction_window) - relativedelta(days=+1)
-        while train_end_time + relativedelta(months=+prediction_window)<=end_time_date:
-            test_start_time = train_end_time + relativedelta(days=+1)
-            test_end_time = test_start_time + relativedelta(months=+prediction_window) - relativedelta(days=+1)
-            
-            print('training date range:', train_start_time, train_end_time) 
-            print('testing date range:', test_start_time, test_end_time)
-            # Build training and testing sets
-            X_train, y_train, X_test, y_test = temporal_train_test_sets(df, train_start_time, train_end_time, test_start_time, test_end_time, feature_cols, predictor_col)
-            # Fill nulls here to avoid data leakage
-            X_train = data_processing.fill_nulls(X_train,'students_reached')
-            X_test = data_processing.fill_nulls(X_test,'students_reached')
-            # Build classifiers
-            row_lst = clf_loop(models_to_run, clfs, grid, X_train, X_test, y_train, y_test, (train_start_time,train_end_time), (test_start_time,test_end_time))
-            # Increment time
-            train_end_time += relativedelta(months=+prediction_window)
-            test_output.extend(row_lst)
-
-    output_df = pd.DataFrame(test_output, columns=('training_dates', 'testing_dates', 'model_type','clf', 
-        'parameters', 'auc-roc','b_a_at_5', 'a_at_5', 'b_a_at_20', 'a_at_20', 'f1_at_5', 'f1_at_20', 'f1_at_50', 'p_at_1','p_at_5', 'p_at_10', 'p_at_20','p_at_50','r_at_1','r_at_5', 'r_at_10', 'r_at_20','r_at_50'))
-
-    return output_df
-
-
-def clf_loop(models_to_run, clfs, grid, X_train, X_test, y_train, y_test, training_dates, testing_dates):
-    """Runs the loop using models_to_run, clfs, gridm and the data
-    """
-    results = []
-    #results_df =  pd.DataFrame(columns=('training_dates', 'testing_dates', 'model_type','clf', 'parameters', 'auc-roc','p_at_5', 'p_at_10', 'p_at_20'))
-    for n in range(1, 2):
-        # create training and valdation sets
-        #X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=0)
-        for index,clf in enumerate([clfs[x] for x in models_to_run]):
-            print(models_to_run[index])
-            parameter_values = grid[models_to_run[index]]
-            for p in ParameterGrid(parameter_values):
-                try:
-                    clf.set_params(**p)
-                    model_fit = clf.fit(X_train, y_train)
-                    y_pred_probs = model_fit.predict_proba(X_test)[:,1]
-                    # you can also store the model, feature importances, and prediction scores
-                    # we're only storing the metrics for now
-                    y_pred_probs_sorted, y_test_sorted = zip(*sorted(zip(y_pred_probs, y_test), reverse=True))
-                    row = [training_dates, testing_dates, models_to_run[index],clf, p,
-                                                       roc_auc_score(y_test, y_pred_probs),
-                                                       accuracy_at_k(y_test_sorted,baseline_preds(y_test_sorted,5.0),5.0),
-                                                       accuracy_at_k(y_test_sorted,y_pred_probs_sorted,5.0),
-                                                       accuracy_at_k(y_test_sorted,baseline_preds(y_test_sorted,20.0),20.0),
-                                                       f1_at_k(y_test_sorted,y_pred_probs_sorted,5.0),
-                                                       f1_at_k(y_test_sorted,y_pred_probs_sorted,20.0),
-                                                       f1_at_k(y_test_sorted,y_pred_probs_sorted,50.0),
-                                                       accuracy_at_k(y_test_sorted,y_pred_probs_sorted,20.0),
-                                                       precision_at_k(y_test_sorted,y_pred_probs_sorted,1.0),
-                                                       precision_at_k(y_test_sorted,y_pred_probs_sorted,5.0),
-                                                       precision_at_k(y_test_sorted,y_pred_probs_sorted,10.0),
-                                                       precision_at_k(y_test_sorted,y_pred_probs_sorted,20.0),
-                                                       precision_at_k(y_test_sorted,y_pred_probs_sorted,50.0),
-                                                       recall_at_k(y_test_sorted,y_pred_probs_sorted,1.0),
-                                                       recall_at_k(y_test_sorted,y_pred_probs_sorted,5.0),
-                                                       recall_at_k(y_test_sorted,y_pred_probs_sorted,10.0),
-                                                       recall_at_k(y_test_sorted,y_pred_probs_sorted,20.0),
-                                                       recall_at_k(y_test_sorted,y_pred_probs_sorted,50.0),
-                                                       ]
-                    results.append(row)
-                    if NOTEBOOK == 1:
-                        plot_precision_recall_n(y_test,y_pred_probs,clf)
-                except IndexError as e:
-                    print('Error:',e)
-                    continue
-    
-    return results
-
