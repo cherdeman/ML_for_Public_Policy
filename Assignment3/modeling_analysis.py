@@ -92,7 +92,7 @@ def clf_loop(models_to_run, clfs, grid, X_train, X_test, y_train, y_test, traini
                                                        recall_at_k(y_test_sorted,y_pred_probs_sorted,50.0),
                                                        ]
                     results.append(row)
-                    plot_precision_recall_n(y_test,y_pred_probs,clf)
+                    #plot_precision_recall_n(y_test,y_pred_probs,clf)
                 except IndexError as e:
                     print('Error:',e)
                     continue
